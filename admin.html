@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TicketHub Admin</title>
+
+  <style>
+    body{
+      font-family:Arial,sans-serif;
+      background:#111;
+      color:#fff;
+      margin:0;
+      padding:20px;
+    }
+
+    .box{
+      max-width:900px;
+      margin:auto;
+      background:#1d1d1d;
+      padding:25px;
+      border-radius:15px;
+    }
+
+    h1{color:#d4af37}
+
+    input,button{
+      width:100%;
+      padding:14px;
+      margin:8px 0;
+      box-sizing:border-box;
+      border-radius:8px;
+      border:1px solid #555;
+      font-size:16px;
+    }
+
+    button{
+      background:#d4af37;
+      color:#111;
+      font-weight:bold;
+      border:0;
+    }
+
+    .logout{
+      background:#444;
+      color:#fff;
+    }
+
+    .order{
+      background:#292929;
+      padding:18px;
+      margin:15px 0;
+      border-radius:12px;
+    }
+
+    .approve{
+      background:#16803c;
+      color:white;
+    }
+
+    .reject{
+      background:#b3261e;
+      color:white;
+    }
+
+    .hidden{display:none}
+
+    .status{
+      padding:8px;
+      border-radius:6px;
+      background:#555;
+      display:inline-block;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="box">
+
+  <div id="login">
+    <h1>TicketHub Admin</h1>
+    <p>Administrator login</p>
+
+    <input
+      type="password"
+      id="password"
+      placeholder="Enter admin password"
+    >
+
+    <button onclick="login()">Login</button>
+
+    <p id="loginError"></p>
+  </div>
+
+
+  <div id="dashboard" class="hidden">
+
+    <h1>TicketHub Admin</h1>
+
+    <button class="logout" onclick="logout()">Logout</button>
+
+    <button onclick="loadOrders()">Refresh Orders</button>
+
+    <h2>Orders</h2>
+
+    <div id="orders">
+      Loading orders...
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+const ADMIN_PASSWORD = "ChangeThisPassword123!";
+
+
+function login(){
+
+  const password =
+    document.getElementById("password").value;
+
+  if(password === ADMIN_PASSWORD){
+
+    document.getElementById("login")
+      .classList.add("hidden");
+
+    document.getElementById("dashboard")
+      .classList.remove("hidden");
+
+    loadOrders();
+
+  }else{
+
+    document.getElementById("loginError")
+      .textContent = "Incorrect password.";
+
+  }
+}
+
+
+function logout(){
+
+  document.getElementById("dashboard")
+    .classList.add("hidden");
+
+  document.getElementById("login")
+    .classList.remove("hidden");
+
+  document.getElementById("password").value = "";
+
+}
+
+
+async function loadOrders(){
+
+  const container =
+    document.getElementById("orders");
+
+  container.innerHTML = "Loading...";
+
+  try{
+
+    const response =
+      await fetch("/api/admin/orders");
+
+    const orders =
+      await response.json();
+
+    if(!orders.length){
+
+      container.innerHTML =
+        "<p>No orders yet.</p>";
+
+      return;
+    }
+
+    container.innerHTML =
+      orders.map(order => `
+
+        <div class="order">
+
+          <h3>${order.eventName}</h3>
+
+          <p>
+            <b>Order:</b>
+            ${order.orderId}
+          </p>
+
+          <p>
+            <b>Name:</b>
+            ${order.customerName}
+          </p>
+
+          <p>
+            <b>Phone:</b>
+            ${order.phone}
+          </p>
+
+          <p>
+            <b>Email:</b>
+            ${order.email || "Not provided"}
+          </p>
+
+          <p>
+            <b>Tickets:</b>
+            ${order.quantity}
+          </p>
+
+          <p>
+            <b>Total:</b>
+            KES ${Number(order.total).toLocaleString()}
+          </p>
+
+          <p>
+            <b>PayBill:</b>
+            ${order.paybill}
+          </p>
+
+          <p>
+            <b>Account:</b>
+            ${order.accountReference}
+          </p>
+
+          <p>
+            <b>Status:</b>
+            <span class="status">
+              ${order.status}
+            </span>
+          </p>
+
+          ${
+            order.status === "PENDING"
+            ? `
+              <button
+                class="approve"
+                onclick="approveOrder('${order.orderId}')">
+                Approve Payment & Create Ticket
+              </button>
+
+              <button
+                class="reject"
+                onclick="rejectOrder('${order.orderId}')">
+                Reject Order
+              </button>
+            `
+            : ""
+          }
+
+          ${
+            order.status === "PAID"
+            ? `
+              <p>
+                <b>Ticket Code:</b>
+                ${order.ticketCode}
+              </p>
+            `
+            : ""
+          }
+
+        </div>
+
+      `).join("");
+
+  }catch(error){
+
+    container.innerHTML =
+      "<p>Unable to load orders.</p>";
+
+  }
+}
+
+
+async function approveOrder(orderId){
+
+  const confirmApproval =
+    confirm(
+      "Have you verified this payment in your M-PESA records?"
+    );
+
+  if(!confirmApproval) return;
+
+  const response =
+    await fetch(
+      "/api/admin/orders/" +
+      encodeURIComponent(orderId) +
+      "/approve",
+      {
+        method:"POST"
+      }
+    );
+
+  const data =
+    await response.json();
+
+  alert(
+    data.message ||
+    "Payment approved."
+  );
+
+  loadOrders();
+}
+
+
+async function rejectOrder(orderId){
+
+  const confirmReject =
+    confirm(
+      "Are you sure you want to reject this order?"
+    );
+
+  if(!confirmReject) return;
+
+  const response =
+    await fetch(
+      "/api/admin/orders/" +
+      encodeURIComponent(orderId) +
+      "/reject",
+      {
+        method:"POST"
+      }
+    );
+
+  const data =
+    await response.json();
+
+  alert(
+    data.message ||
+    "Order rejected."
+  );
+
+  loadOrders();
+}
+
+</script>
+
+</body>
+</html>
